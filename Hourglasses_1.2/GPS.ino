@@ -1,4 +1,7 @@
 
+
+// EVERYTHING HERE IS DEPRACATED - ALL GPS HAPPENING IN "SECONDS.INO"
+
 //These functions retrieves and interprets the GPS data
 //A testing mode is available that prints every pulse of data to USB serial
 
@@ -18,26 +21,31 @@ void localTime(TinyGPS &gps){
   int year;
   byte month, day, hour, minute, second, hundredths;
   unsigned short sentences, failed;
-
+    Serial.print(testmode);
     gps.get_datetime(&date, &time, &age);
-    Serial.print("Date UDC(ddmmyy): "); Serial.print(date); Serial.print(" Time UDC(hhmmsscc): ");
-    Serial.print(time);
-    Serial.print(" Fix age: "); Serial.print(age); Serial.println("ms.");
+        if(testmode == HIGH){
+          Serial.print("Date UDC(ddmmyy): "); Serial.print(date); Serial.print(" Time UDC(hhmmsscc): ");
+          Serial.print(time);
+          Serial.print(" Fix age: "); Serial.print(age); Serial.println("ms.");}
 
     gps.crack_datetime(&year, &month, &day, &hour, &minute, &second, &hundredths, &age);
-    Serial.print("Date in Calgary: "); 
+        if(testmode == HIGH){Serial.print("Date in Calgary: ");} 
         if (time < 4000000){day--;}  // adjust day for UTC 
-        Serial.print(static_cast<int>(month)); Serial.print("/"); 
-        Serial.print(static_cast<int>(day)); Serial.print("/"); Serial.print(year);
-    Serial.print("  Time in Calgary: "); 
+            if(testmode == HIGH){
+            Serial.print(static_cast<int>(month)); Serial.print("/"); 
+            Serial.print(static_cast<int>(day)); Serial.print("/"); Serial.print(year);}
+        if(testmode == HIGH){Serial.print("  Time in Calgary: "); }
         if(hour+18 >= 24){hour = hour -6;} // prevent hours above midnight
-        else {Serial.print(static_cast<int>(hour+18));}  
-        Serial.print(":"); 
+        else {hour = hour+18;}  
+        if(testmode == HIGH){Serial.print("hour"); }
+        if(testmode == HIGH){Serial.print(":"); } 
     Serial.print(static_cast<int>(minute)); Serial.print(":"); Serial.print(static_cast<int>(second));
     Serial.print("."); Serial.print(static_cast<int>(hundredths)); Serial.print(" UTC -06:00 Calgary");
     Serial.print("  Fix age: ");  Serial.print(age); Serial.println("ms.");
 }
 
+
+// gpsDUMP function is useful for debugging GPS chips, by viewing all data available.  NOT USED
 void gpsdump(TinyGPS &gps)
 {
   long lat, lon;
