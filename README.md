@@ -1,5 +1,5 @@
-# YesterdayTodayTomorrow
-Controller files for Yesterday, Today, Tomorrow
+# A multiplex powere controller to time and set 128 motors at 512 addressed locations
+Controller files for *A SECRET ART PROJECT EEE*
 
 references:
 http://www.instructables.com/id/How-to-Communicate-Neo-6M-GPS-to-Arduino/
