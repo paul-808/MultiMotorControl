@@ -50,12 +50,14 @@ TinyGPS gps;
 void gpsdump(TinyGPS &gps);
 void localTime(TinyGPS &gps);
 void printFloat(double f, int digits = 2);
-void secondsToday(TinyGPS &gps);
+void getsecondsGPS(TinyGPS &gps);
 void triggers();
+void checkGPS();
 
 
 bool testmode = 1;
 byte testpin = 12;
+bool gotGPS = 0;
 
 byte add1 = 9;
 byte add2 = 10;
@@ -63,12 +65,15 @@ byte add3 = 11;
 byte controlNumber = 0;
 int HGID = 999;
 byte ref = 254;
-byte debouncetime = 3; // must be at least 2s, must be < maxactive
+byte debouncetime = 3; // motor debounce. must be at least 1s, must be < maxactive
+int rest = 600; // number of seconds to rest after midnight
 
 unsigned long start = 0;
-unsigned long initiate = 0;
-unsigned long secondsTotal = 0;
+long secondsTotal = 86423; //smallest prime larger than 86400
+unsigned long secondsGPS = 86423; //smallest prime larger than 86400
 unsigned long millisAtTime = 0;
+unsigned long millisElapsed = 0;
+unsigned long checkFreq = 10000; // Reading GPS takes ~100ms. Set this high (seconds) to avoid checking often. 
 uint16_t counter = 0;
 byte inputs = 0;
 byte outputs = 0;
@@ -100,11 +105,11 @@ boolean HGstatus[128] =
 const uint32_t PROGMEM HGfreq[128] = 
 {3,4,5,6,7,8,3,4,15,12,13,14,15,16,17,18,
  6,7,3,4,5,6,9,8,9,2,8,4,5,6,7,8,
- 6,9,3,4,5,6,7,8,1,2,3,8,5,8,7,5,
+ 6,9,3,4,5,6,7,8,8,2,3,8,5,8,7,5,
  8,7,8,4,5,6,7,5,9,8,3,4,8,5,7,8,
- 6,9,3,4,5,6,9,8,1,2,8,4,5,8,7,8,
+ 6,9,3,4,5,6,9,8,8,2,8,4,5,8,7,8,
  8,7,8,4,5,6,7,5,9,2,3,8,5,6,5,8,
- 7,9,3,4,5,6,7,8,1,8,3,4,8,6,7,5,
+ 7,9,3,4,5,6,7,8,8,8,3,4,8,6,7,5,
  7,7,3,4,5,6,9,5,9,2,8,4,5,8,5,8};   
 
 // Reference array: which position is each HG id wired into?
@@ -261,18 +266,22 @@ void setup()
   Wire.write(0x01); // set all of port A to intputs
   Wire.endTransmission();
   Wire.beginTransmission(0x20+i); 
-  Wire.write(0x16); // DEFVALA (pull-up) register (if this doesnt work the hall effect won't work, outputs should read +5v)
-  // note: if errors try 0x06, 0xC, and 0xD
+  Wire.write(0x0C); // DEFVALA (pull-up) register (if this doesnt work the hall effect won't work, outputs should read +5v)
+  // note: if errors try 00x16**,0x06**, 0x0C**, and 0x0D**
   Wire.write(0xFF); // turn on pull-ups
   Wire.endTransmission();
   Wire.beginTransmission(0x20+i);  
   Wire.write(0x01); // IODIRB register
   Wire.write(0x00); // set all of port B to outputs
   Wire.endTransmission();
+  Wire.beginTransmission(0x20+i); 
+  Wire.write(0x13); // set MCP23017 memory pointer to GPIOb address  UNTESTED
+  Wire.write(0xFF);   // Make sure everything is turned off ASAP
+  Wire.endTransmission();
   }
-  Serial.println("Multiplexer ok..."); 
+  Serial.println("Mux ok..."); 
   
-  Serial.print("This is Controller #");
+  Serial.print("This is CPU #");
     pinMode(add1,INPUT);
     pinMode(add2,INPUT); 
     pinMode(add3,INPUT);
@@ -285,16 +294,22 @@ void setup()
   // Serial.print("Sizeof(gpsobject) = "); 
   // Serial.println(sizeof(TinyGPS));
   // Check for debugging mode
+  
   pinMode(testpin,INPUT);
   testmode = digitalRead(testpin);
   if(testmode == 1){
-     Serial.println("In TESTING/DEBUG (verbose&slow) mode.");
-     Serial.println("Legend: ID:#|freq|status  999 = not used");
+     Serial.println("In DEBUG (verbose&slow) mode.");
+     //Serial.println("Legend: ID:#|freq|status  999 = not used"); .. for extraverbose debugging
   }
     if(testmode == 0){
-     Serial.println("In RUN/PRODUCTION (silent&fast) mode.");
+     Serial.println("In RUN (silent&fast) mode.");
   }
-  // And wait....
+  
+  // And wait for GPS....
+  Serial.println("waiting on 1st GPS");
+  while (gotGPS == 0){
+    checkGPS();
+    }
 
   Serial.println();
 
@@ -302,37 +317,31 @@ void setup()
 
 void loop() {
 
+  // Time to check the GPS? and is there GPS?
+     if (millis()-millisAtTime > (checkFreq*1000)){
+      checkGPS();
+     }
+    // listen for reasons to change outputs!
+    triggers();  
+    if (testmode == 1) {delay(500);}
+    //Serial.println(millis()); // speedtest only
+}
 
-  bool newdata2 = false;
-  while (millis() - initiate > 100) // MS check freq!
-  {
-    if (mySerial.available()) 
+
+
+void checkGPS(){
+    while (mySerial.available()) 
     {
       char c = mySerial.read();
       if (gps.encode(c)) 
       {
-        newdata2 = true;
-        break;  
-        
+    if(testmode == 1){Serial.println("---");}
+      getsecondsGPS(gps);
+      gotGPS = 1;
+    if(testmode == 1){Serial.println("---");}
+        break;       
       }
-
     }
-
-  }
-  if (newdata2) 
-  {
-    counter = 0;
-    newdata2 = false;
-    initiate = millis();
-    
-    if(testmode == 1){Serial.println("---");}
-      secondsToday(gps);
-    if(testmode == 1){Serial.println("---");}
-  
-  }
-    triggers();  //move this outside of the secondstoday loop into the main loop
 }
-
-
 
 

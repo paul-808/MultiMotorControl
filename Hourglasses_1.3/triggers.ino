@@ -1,6 +1,3 @@
-
-
-void triggers() {
   // This function cycles through all 8 possible MCP addresses
   // Records the readings from each, reports them to serieal,
   // Records their values in an array, and then refers to that
@@ -14,9 +11,23 @@ void triggers() {
   // http://playground.arduino.cc/Code/BitMath
 
 
-
+void triggers() {
   int isaddress = 0;
 
+    //************************************************
+    // what time is it, REALLY???
+    //************************************************
+
+  millisElapsed = millis() - millisAtTime;  // difference in millis *immune to rollover
+  secondsTotal = secondsGPS + (millisElapsed/1000); // extrapolate time
+  if(secondsTotal>86400){  // correct for seconds rollover
+    secondsTotal = secondsTotal-86400;
+  }
+  secondsTotal = secondsTotal - 43200; // make noon a zero!!!
+  //Serial.print(secondsTotal);
+  //Serial.print(" ");
+  //Serial.println(millis());
+  
   for (int i = 0; i < 8; i++) { //cycle through slaves (64!)
     int MCPid = 0x20 + i;
 
@@ -67,24 +78,24 @@ void triggers() {
         }
       } // close search loop because current ID is stored in HGID or HGID = 999
 
-      if (testmode == 1) {
+     /* if (testmode == 1) {
         Serial.print(" ID:");
       }
       if (testmode == 1) {
         Serial.print(HGID); // Checked! This does infact contain the 1-128 reference or is 999.
-      }
+      }*/
 
       // so now we know that at position (1-512, based on loop position), HGID is the real ID (1-128)
       // (remember to -1 in the arrays to 0 ref everytihng)
       // if the relay is off and seconds elapsed % frequency is 0;
 
       if (HGID < 999) { //if there is an HG at this position...
-        if (testmode == 1) {Serial.print("|"); Serial.print(pgm_read_word(&HGfreq[HGID]));
-                            Serial.print("|"); Serial.print(HGstatus[HGID]);}
-        if ((HGstatus[HGID] == 0) && (secondsTotal % pgm_read_word(&HGfreq[HGID]) == 0)) {  // if it's time, and current HG is off,
+        /*if (testmode == 1) {Serial.print("|"); Serial.print(pgm_read_word(&HGfreq[HGID]));
+                            Serial.print("|"); Serial.print(HGstatus[HGID]);}*/
+        if ((HGstatus[HGID] == 0) && (abs(secondsTotal) % pgm_read_word(&HGfreq[HGID]) == 0)) {  // if it's time, and current HG is off,
           HGstatus[HGID] = 1; //then turn it on!
           HGupdate[HGID] = secondsTotal; // and record the time!
-          if (testmode == 1) {Serial.print(">"); Serial.print(HGupdate[HGID]); Serial.print("|"); Serial.print(HGstatus[HGID]);} //verbose boolean and trigger testing; don't use unless you're really screwed
+          /*if (testmode == 1) {Serial.print(">"); Serial.print(HGupdate[HGID]); Serial.print("|"); Serial.print(HGstatus[HGID]);} //verbose boolean and trigger testing; don't use unless you're really screwed*/
         }// Confirmed = THIS WORKS! :: modulo works, seconds are recorded, status is updated
         if ((HGstatus[HGID] == 1) && (secondsTotal - HGupdate[HGID] > debouncetime)) { // if it's on AND it's out of debounce
           
@@ -113,6 +124,10 @@ void triggers() {
     //************************************************
     // Send outputs to the MCP
     //************************************************
+
+      if (secondsTotal < (rest - 43200)){
+        outputs = 0;
+      }
 
     Wire.beginTransmission(MCPid); //select 1st MCP "000"
     Wire.write(0x13); // set MCP23017 memory pointer to GPIOb address

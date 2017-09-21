@@ -1,5 +1,5 @@
 // gets time and calculates seconds today  
-void secondsToday(TinyGPS &gps){
+void getsecondsGPS(TinyGPS &gps){
   long lat, lon;
   float flat, flon;
   unsigned long age, date, time, chars;
@@ -21,21 +21,19 @@ void secondsToday(TinyGPS &gps){
         if(hour+18 >= 24){hours = hour -6;} // prevent hours above midnight
         else {hours = hour + 18;}
         if(testmode == 1){Serial.print(static_cast<int>(hours));}
-        secondsTotal =  (static_cast<int>(hours));
-        secondsTotal = secondsTotal *60*60;
+        secondsGPS =  (static_cast<int>(hours));
+        secondsGPS = secondsGPS *60*60;
         if(testmode == 1){ Serial.print(":"); }
     if(testmode == 1){Serial.print(static_cast<int>(minute)); }
-        secondsTotal = secondsTotal + (minute*60) + second;
+        secondsGPS = secondsGPS + (minute*60) + second;
         millisAtTime = millis();
     if(testmode == 1){Serial.print(":"); Serial.print(static_cast<int>(second));
     Serial.print("."); Serial.print(static_cast<int>(hundredths)); Serial.print(" UTC -06:00 Calgary");
     Serial.print("  Fix age: ");  Serial.print(age); Serial.println("ms.");}
 
     if(testmode == 1){
-    Serial.print("Seconds today/millis: ");
-    Serial.print(secondsTotal);Serial.print("//");
-    Serial.println(millis());
-    //Serial.print(" test:");Serial.print((B1010010));
+    Serial.print("Seconds today: ");
+    Serial.print(secondsGPS);Serial.print("//");
     }
-
+    //Serial.print("new GPS");
 }
