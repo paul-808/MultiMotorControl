@@ -54,7 +54,6 @@ void getsecondsGPS(TinyGPS &gps);
 void triggers();
 void checkGPS();
 
-
 bool testmode = 1;
 byte testpin = 12;
 bool gotGPS = 0;
@@ -65,19 +64,29 @@ byte add3 = 11;
 byte controlNumber = 0;
 int HGID = 999;
 byte ref = 254;
-byte debouncetime = 3; // motor debounce. must be at least 1s, must be < maxactive
-int rest = 600; // number of seconds to rest after midnight
+
 
 unsigned long start = 0;
-long secondsTotal = 86423; //smallest prime larger than 86400
+long secondsTotal = 86423; //smallest prime larger than 86400 (needs to be indivisible by any possible measure)
 unsigned long secondsGPS = 86423; //smallest prime larger than 86400
 unsigned long millisAtTime = 0;
 unsigned long millisElapsed = 0;
-unsigned long checkFreq = 10000; // Reading GPS takes ~100ms. Set this high (seconds) to avoid checking often. 
 uint16_t counter = 0;
 byte inputs = 0;
 byte outputs = 0;
-int maxactive = 10; // max period a motor will be active!!! safety limit!!
+bool animate = 1;
+unsigned long animtime = millis();
+
+   //************************************************
+   // Options! everything is in seconds. 
+   //************************************************
+
+byte debouncetime = 2; // motor debounce. must be at least 1s, must be < maxactive. Note it is X+1 (changes at next check)
+byte maxactive = 10; // max period a motor will be active!!! safety limit in case Hall Sensor FAILS!!
+byte animLength = 60; // length of time to delay (s) so the noon animation can play.
+unsigned long checkFreq = 15; // Reading GPS takes ~100ms. Set this high (seconds) to avoid checking often. 
+int rest = 600; // number of seconds to rest after midnight (to avoid possible rapid flipping at midnight)
+
 
    //************************************************
    // Reference arrays !!MUST BE UPDATED!!
@@ -103,7 +112,18 @@ boolean HGstatus[128] =
 
 //Actual frequency array ; useful for testing (currently contains dummy values)
 const uint32_t PROGMEM HGfreq[128] = 
-{3,4,5,6,7,8,3,4,15,12,13,14,15,16,17,18,
+{15,15,30,45,89,60,61,62,15,12,13,14,15,16,17,18,
+ 6,7,3,4,5,6,9,8,9,2,8,4,5,6,7,8,
+ 6,9,3,4,5,6,7,8,8,2,3,8,5,8,7,5,
+ 8,7,8,4,5,6,7,5,9,8,3,4,8,5,7,8,
+ 6,9,3,4,5,6,9,8,8,2,8,4,5,8,7,8,
+ 8,7,8,4,5,6,7,5,9,2,3,8,5,6,5,8,
+ 7,9,3,4,5,6,7,8,8,8,3,4,8,6,7,5,
+ 7,7,3,4,5,6,9,5,9,2,8,4,5,8,5,8};   
+
+//Timing for the AnimaAAAAAaaaAAAtion
+const uint32_t PROGMEM AMINAAATE[128] = 
+{15,15,30,45,450,60,61,62,15,12,13,14,15,16,17,18,
  6,7,3,4,5,6,9,8,9,2,8,4,5,6,7,8,
  6,9,3,4,5,6,7,8,8,2,3,8,5,8,7,5,
  8,7,8,4,5,6,7,5,9,8,3,4,8,5,7,8,
@@ -114,7 +134,7 @@ const uint32_t PROGMEM HGfreq[128] =
 
 // Reference array: which position is each HG id wired into?
 // position = Controller*64 + slave*8 + position number (each indexed to 0)
-// 1-128 hourglass number, 0-511 position index
+// 0-127 hourglass number, 0-511 position index
 
 const uint16_t PROGMEM refArray[128][2] = {
 {0,0},
@@ -247,9 +267,7 @@ const uint16_t PROGMEM refArray[128][2] = {
 {127,127}
 };
 
-void setup()  
-  
-{
+void setup() {
   // Open serial communications and wait for port to open:
   Serial.begin(9600);
   // set the data rate for the SoftwareSerial port
@@ -260,25 +278,30 @@ void setup()
   // Inititate MCP Multiplexer
 
   for (int i = 0 ; i<8; i++){
-  Wire.begin(); // wake up I2C bus
-  Wire.beginTransmission(0x20+i); // select multiplexer 
-  Wire.write(0x00); // IODIRA register
-  Wire.write(0x01); // set all of port A to intputs
-  Wire.endTransmission();
-  Wire.beginTransmission(0x20+i); 
-  Wire.write(0x0C); // DEFVALA (pull-up) register (if this doesnt work the hall effect won't work, outputs should read +5v)
-  // note: if errors try 00x16**,0x06**, 0x0C**, and 0x0D**
-  Wire.write(0xFF); // turn on pull-ups
-  Wire.endTransmission();
-  Wire.beginTransmission(0x20+i);  
-  Wire.write(0x01); // IODIRB register
-  Wire.write(0x00); // set all of port B to outputs
-  Wire.endTransmission();
-  Wire.beginTransmission(0x20+i); 
-  Wire.write(0x13); // set MCP23017 memory pointer to GPIOb address  UNTESTED
-  Wire.write(0xFF);   // Make sure everything is turned off ASAP
-  Wire.endTransmission();
+      Wire.beginTransmission(0x20+i);  
+      Wire.write(0x01); // IODIRB register
+      Wire.write(0x00); // set all of port B to outputs
+      Wire.endTransmission();
+      
+      Wire.beginTransmission(0x20+i); 
+      Wire.write(0x13); // set MCP23017 memory pointer to GPIOb address  UNTESTED
+      Wire.write(0xFF);   // Make sure everything is turned off ASAP
+      Wire.endTransmission();
+      
+      Wire.beginTransmission(0x20+i); 
+      Wire.write(0x16); // DEFVALA (pull-up) register (if this doesnt work the hall effect won't work, outputs should read +5v)
+      // note: if errors try 00x16*,0x06, 0x0C, and 0x0D (0C is correct, technically)
+      // note: during testing this did not produce expected pull-ups.
+      Wire.write(0xFF); // turn on pull-ups
+      Wire.endTransmission();
+    
+      Wire.begin(); // wake up I2C bus
+      Wire.beginTransmission(0x20+i); // select multiplexer 
+      Wire.write(0x00); // IODIRA register
+      Wire.write(0xFF); // set all of port A to intputs
+      Wire.endTransmission();
   }
+  
   Serial.println("Mux ok..."); 
   
   Serial.print("This is CPU #");
@@ -293,8 +316,8 @@ void setup()
   // Debug GPS buffer messages
   // Serial.print("Sizeof(gpsobject) = "); 
   // Serial.println(sizeof(TinyGPS));
-  // Check for debugging mode
   
+  // Check for debugging mode
   pinMode(testpin,INPUT);
   testmode = digitalRead(testpin);
   if(testmode == 1){
@@ -310,9 +333,7 @@ void setup()
   while (gotGPS == 0){
     checkGPS();
     }
-
-  Serial.println();
-
+  Serial.println("GPS OK!");
 }
 
 void loop() {

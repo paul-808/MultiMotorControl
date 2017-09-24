@@ -4,6 +4,8 @@
   // array to set corresponding outputs. These are debounced,.
   // and turned off after 10 seconds if they don't otherwise turn off
 
+  // Note verbose test mode has been commented out.
+
 
   // http://tronixstuff.com/2011/08/26/tutorial-maximising-your-arduinos-io-ports/
   // http://www.unifiedmicro.com/IOX-16_Input_Demo.txt
@@ -15,25 +17,39 @@ void triggers() {
   int isaddress = 0;
 
     //************************************************
-    // what time is it, REALLY???
+    // what time is it, REALLY??? AAWHAT EVEN IS TIME
     //************************************************
 
   millisElapsed = millis() - millisAtTime;  // difference in millis *immune to rollover
   secondsTotal = secondsGPS + (millisElapsed/1000); // extrapolate time
   if(secondsTotal>86400){  // correct for seconds rollover
-    secondsTotal = secondsTotal-86400;
+    secondsTotal = secondsTotal - 86400;
   }
-  secondsTotal = secondsTotal - 43200; // make noon a zero!!!
-  //Serial.print(secondsTotal);
-  //Serial.print(" ");
-  //Serial.println(millis());
+  secondsTotal = secondsTotal - 43200 ; // make noon a zero!!!
   
-  for (int i = 0; i < 8; i++) { //cycle through slaves (64!)
-    int MCPid = 0x20 + i;
+  // This little bit inserts a delay at noon for the animation to play in. 
+  if (secondsTotal > 0 && secondsTotal < animLength){  // note must start before 0 to suppress noon flip
+    secondsTotal = 0;
+    animate = 1;
+    animtime = millis();
+
+    // TO BE CODED: Currently the system is stuck in zero for the whole animation and all relays active for that time!!!
+    // Code so that flips are initiated in sequence, based on aminate array.
+    // Probably best put in a whole new function
+    
+  }
+  else if (secondsTotal > 0){
+    secondsTotal = secondsTotal - animLength;
+  }
+  
+  Serial.println(secondsTotal);
 
     //************************************************
-    // First, check the current status of this slave
+    // First, check the current status of each slave
     //************************************************
+
+    for (int i = 0; i < 8; i++) { //cycle through slaves (64! or 8 per cpu) 
+    int MCPid = 0x20 + i;
 
     Wire.beginTransmission(MCPid); //select 1st MCP "000"
     Wire.write(0x12); // set MCP23017 memory pointer to GPIOa address
@@ -44,9 +60,11 @@ void triggers() {
       Serial.print(MCPid - 31); //print MCP number from 1-8
       Serial.print(" read: ");
     }
+    
     if (staatus == 0) {
       Wire.requestFrom(MCPid, 1); // request one byte of data from MCP20317
       inputs = Wire.read(); // store the incoming byte into "inputs"
+      inputs = ~inputs; //invert because I coded it backwards and switched to pullups instead of pulldowns
       if (testmode == 1) {
         Serial.print(inputs, BIN); // display the contents of the GPIOB register in binary
         //Serial.print("  time (ms): "); // time report for testing/debugging
@@ -80,8 +98,6 @@ void triggers() {
 
      /* if (testmode == 1) {
         Serial.print(" ID:");
-      }
-      if (testmode == 1) {
         Serial.print(HGID); // Checked! This does infact contain the 1-128 reference or is 999.
       }*/
 
@@ -93,9 +109,12 @@ void triggers() {
         /*if (testmode == 1) {Serial.print("|"); Serial.print(pgm_read_word(&HGfreq[HGID]));
                             Serial.print("|"); Serial.print(HGstatus[HGID]);}*/
         if ((HGstatus[HGID] == 0) && (abs(secondsTotal) % pgm_read_word(&HGfreq[HGID]) == 0)) {  // if it's time, and current HG is off,
-          HGstatus[HGID] = 1; //then turn it on!
-          HGupdate[HGID] = secondsTotal; // and record the time!
-          /*if (testmode == 1) {Serial.print(">"); Serial.print(HGupdate[HGID]); Serial.print("|"); Serial.print(HGstatus[HGID]);} //verbose boolean and trigger testing; don't use unless you're really screwed*/
+          
+          if (secondsTotal > (rest - 43200)){  // don't initiate anything while resting (And time in between -43200 and +rest
+                      HGstatus[HGID] = 1; //then turn it on!
+                      HGupdate[HGID] = secondsTotal; // and record the time!
+          }
+        /*if (testmode == 1) {Serial.print(">"); Serial.print(HGupdate[HGID]); Serial.print("|"); Serial.print(HGstatus[HGID]);} //verbose boolean and trigger testing; don't use unless you're really screwed*/
         }// Confirmed = THIS WORKS! :: modulo works, seconds are recorded, status is updated
         if ((HGstatus[HGID] == 1) && (secondsTotal - HGupdate[HGID] > debouncetime)) { // if it's on AND it's out of debounce
           
@@ -104,7 +123,7 @@ void triggers() {
           l = (l >> j); //Serial.print("?c");Serial.print(l, BIN);
           if (l==1) { // check if index k HG is 1 or 0, if 1 shutoff, or emerge shutoff if active for too long
             HGstatus[HGID] = 0; //Turn it off
-            if (testmode == 1) {Serial.print("X");} //indicate that OFF SENT DUE TO input.
+            if (testmode == 1) {Serial.print("X");} //indicate that OFF SENT DUE TO input/hall effect trigger.
           }
           else if ((secondsTotal - HGupdate[HGID]) > maxactive) { // check if index k HG is 1 or 0, if 1 shutoff, or emerge shutoff if active for too long
             HGstatus[HGID] = 0; //Turn it off
@@ -125,9 +144,6 @@ void triggers() {
     // Send outputs to the MCP
     //************************************************
 
-      if (secondsTotal < (rest - 43200)){
-        outputs = 0;
-      }
 
     Wire.beginTransmission(MCPid); //select 1st MCP "000"
     Wire.write(0x13); // set MCP23017 memory pointer to GPIOb address
@@ -142,6 +158,6 @@ void triggers() {
       //Serial.println(millis()); // time report for testing/debugging
     }
   }
-  //outputs = outputs+1; // increment
+  
 }
 

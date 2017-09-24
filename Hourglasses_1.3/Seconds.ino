@@ -31,9 +31,10 @@ void getsecondsGPS(TinyGPS &gps){
     Serial.print("."); Serial.print(static_cast<int>(hundredths)); Serial.print(" UTC -06:00 Calgary");
     Serial.print("  Fix age: ");  Serial.print(age); Serial.println("ms.");}
 
-    if(testmode == 1){
+    //if(testmode == 1){
     Serial.print("Seconds today: ");
-    Serial.print(secondsGPS);Serial.print("//");
-    }
+    Serial.println(secondsGPS);
+    //}
+    
     //Serial.print("new GPS");
 }
