@@ -1,5 +1,5 @@
 # A multiplex powered arduino-based controller to time and set 128 motors at 512 addressed locations
-Controller files for 2019 upcoming art installation
+Controller files for 2019 art installation 
 
 Features:
 * Ridiculous bitmath to reduce program size
